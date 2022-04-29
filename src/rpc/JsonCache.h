@@ -14,15 +14,22 @@ class JSONCache
         cache_.reserve(maxSize);
     }
 
+    bool
+    contains(ripple::uint256 const& key)
+    {
+        std::shared_lock lck{mtx_};
+        return cache_.contains(key);
+    }
+
     void
     invalidate(std::vector<ripple::uint256> const& keys)
     {
         for (auto key : keys)
         {
-            std::unique_lock lck{mtx_};
-            if (!cache_.contains(key))
+            if (!contains(key))
                 continue;
 
+            std::unique_lock lck{mtx_};
             auto& [it, obj] = cache_[key];
             queue_.erase(it);
             cache_.erase(key);
@@ -32,10 +39,10 @@ class JSONCache
     std::optional<boost::json::object>
     get(ripple::uint256 const& key)
     {
-        std::unique_lock lck{mtx_};
-        if (!cache_.contains(key))
+        if (!contains(key))
             return {};
 
+        std::shared_lock lck{mtx_};
         auto& [it, obj] = cache_[key];
         queue_.erase(it);
         queue_.push_front(obj);
@@ -43,17 +50,25 @@ class JSONCache
         return obj;
     }
 
+    size_t
+    size()
+    {
+        std::shared_lock lck{mtx_};
+        return cache_.size();
+    }
+
     void
     put(ripple::uint256 const& key, boost::json::object const& val)
     {
-        std::unique_lock lck{mtx_};
-        if (cache_.size() >= maxSize)
+        if (size() >= maxSize)
         {
-            auto& key = queue_.back();
-            cache_.erase(key);
+            std::unique_lock lck{mtx_};
+            auto& it = queue_.back();
+            cache_.erase(*it);
             queue_.pop_back();
         }
 
+        std::unique_lock lck{mtx_};
         queue_.push_front(key);
         cache_[key] = {queue_.front(), obj};
     }

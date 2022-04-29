@@ -699,11 +699,11 @@ async def ledgers(ip, port, minLedger, maxLedger, transactions, expand, maxCalls
     address = 'ws://' + str(ip) + ':' + str(port)
     random.seed()
     ledger = 0
-    ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
-    localhost_pem = pathlib.Path(__file__).with_name("cert.pem")
-    ssl_context.load_verify_locations(localhost_pem)
-    ssl_context.check_hostname = False
-    ssl_context.verify_mode = ssl.CERT_NONE
+    #ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+    #localhost_pem = pathlib.Path(__file__).with_name("cert.pem")
+    #ssl_context.load_verify_locations(localhost_pem)
+    #ssl_context.check_hostname = False
+    #ssl_context.verify_mode = ssl.CERT_NONE
     try:
         async with websockets.connect(address,max_size=1000000000) as ws:
             global numCalls
@@ -721,7 +721,8 @@ async def ledgers(ip, port, minLedger, maxLedger, transactions, expand, maxCalls
                 if "error" in res:
                     print(res["error"])
                 else:
-                    print(res["header"]["blob"])
+                    print(res)
+                    #print(res["header"]["blob"])
 
     except websockets.exceptions.ConnectionClosedError as e:
         print(e)
