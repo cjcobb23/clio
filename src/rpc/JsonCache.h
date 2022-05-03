@@ -8,8 +8,9 @@ class JSONCache
     std::unordered_map<ripple::uint256, CacheEntry> cache_;
     std::deque<ripple::uint256> queue_;
     std::shared_mutex mtx_;
+    size_t maxSize_;
 
-    class JSONCache(size_t maxSize)
+    JSONCache(size_t maxSize) : maxSize_(maxSize)
     {
         cache_.reserve(maxSize);
     }
@@ -72,4 +73,4 @@ class JSONCache
         queue_.push_front(key);
         cache_[key] = {queue_.front(), obj};
     }
-}
+};

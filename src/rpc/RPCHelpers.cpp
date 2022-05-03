@@ -1,5 +1,6 @@
 #include <boost/algorithm/string.hpp>
 #include <backend/BackendInterface.h>
+#include <rpc/JsonCache.h>
 #include <rpc/RPCHelpers.h>
 namespace RPC {
 
