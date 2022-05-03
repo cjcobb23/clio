@@ -97,8 +97,9 @@ doBookOffers(Context const& context)
 
     end = std::chrono::system_clock::now();
 
-    BOOST_LOG_TRIVIAL(warning) << "Time transforming to json: "
-                               << ((end - start).count() / 1000000000.0);
+    BOOST_LOG_TRIVIAL(warning)
+        << "Time transforming to json: "
+        << ((end - start).count() / 1000000000.0) << " - request = " << request;
 
     if (retCursor)
         response["marker"] = ripple::strHex(*retCursor);
