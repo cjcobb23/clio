@@ -190,6 +190,23 @@ buildResponse(Context const& ctx);
 bool
 validHandler(std::string const& method);
 
+template <class T>
+void
+logDuration(Context const& ctx, T const& dur)
+{
+    std::stringstream ss;
+    ss << "Request processing duration " << dur.count()
+       << " microseconds. request = " << ctx.params;
+    auto seconds =
+        std::chrono::duration_cast<std::chrono::seconds>(dur).count();
+    if (seconds > 10)
+        BOOST_LOG_TRIVIAL(error) << ss.str();
+    else if (seconds > 1)
+        BOOST_LOG_TRIVIAL(warning) << ss.str();
+    else
+        BOOST_LOG_TRIVIAL(debug) << ss.str();
+}
+
 }  // namespace RPC
 
 #endif  // REPORTING_RPC_H_INCLUDED
