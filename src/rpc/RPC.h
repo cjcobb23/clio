@@ -195,8 +195,9 @@ void
 logDuration(Context const& ctx, T const& dur)
 {
     std::stringstream ss;
-    ss << "Request processing duration " << dur.count()
-       << " microseconds. request = " << ctx.params;
+    ss << "Request processing duration = "
+       << std::chrono::duration_cast<std::chrono::milliseconds>(dur).count()
+       << " milliseconds. request = " << ctx.params;
     auto seconds =
         std::chrono::duration_cast<std::chrono::seconds>(dur).count();
     if (seconds > 10)
