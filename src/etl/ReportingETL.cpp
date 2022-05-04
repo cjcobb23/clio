@@ -144,6 +144,7 @@ ReportingETL::publishLedger(ripple::LedgerInfo const& lgrInfo)
                 return backend_->fetchLedgerDiff(lgrInfo.seq, yield);
             });
 
+        backend_->jsonCache().invalidate(diff);
         backend_->cache().update(diff, lgrInfo.seq);
         backend_->updateRange(lgrInfo.seq);
     }
@@ -427,6 +428,7 @@ ReportingETL::buildNextLedger(org::xrpl::rpc::v1::GetLedgerResponse& rawData)
             lgrInfo.seq,
             std::move(*obj.mutable_data()));
     }
+    backend_->jsonCache().invalidate(cacheUpdates);
     backend_->cache().update(cacheUpdates, lgrInfo.seq);
     // rippled didn't send successor information, so use our cache
     if (!rawData.object_neighbors_included())

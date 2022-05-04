@@ -3,6 +3,7 @@
 #include <ripple/ledger/ReadView.h>
 #include <boost/asio.hpp>
 #include <backend/DBHelpers.h>
+#include <backend/JsonCache.h>
 #include <backend/SimpleCache.h>
 #include <backend/Types.h>
 #include <thread>
@@ -85,12 +86,13 @@ protected:
     mutable std::shared_mutex rngMtx_;
     std::optional<LedgerRange> range;
     SimpleCache cache_;
+    JSONCache jsonCache_;
 
     // mutex used for open() and close()
     mutable std::mutex mutex_;
 
 public:
-    BackendInterface(boost::json::object const& config)
+    BackendInterface(boost::json::object const& config) : jsonCache_(65536)
     {
     }
     virtual ~BackendInterface()
@@ -115,6 +117,17 @@ public:
     cache()
     {
         return cache_;
+    }
+
+    JSONCache&
+    jsonCache()
+    {
+        return jsonCache_;
+    }
+    JSONCache const&
+    jsonCache() const
+    {
+        return jsonCache_;
     }
 
     virtual std::optional<ripple::LedgerInfo>

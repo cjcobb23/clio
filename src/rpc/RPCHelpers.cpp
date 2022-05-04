@@ -1,6 +1,5 @@
 #include <boost/algorithm/string.hpp>
 #include <backend/BackendInterface.h>
-#include <rpc/JsonCache.h>
 #include <rpc/RPCHelpers.h>
 namespace RPC {
 
@@ -325,19 +324,29 @@ deserializeTxPlusMeta(
 }
 
 boost::json::object
-toJson(ripple::STBase const& obj)
+toJson(ripple::STBase const& obj, BackendInterface const& backend)
 {
-    boost::json::value value = boost::json::parse(
-        obj.getJson(ripple::JsonOptions::none).toStyledString());
+    try
+    {
+        auto& sle = obj.downcast<ripple::SLE>();
+        return toJson(sle, backend);
+    }
+    catch (std::bad_cast& e)
+    {
+        boost::json::value value = boost::json::parse(
+            obj.getJson(ripple::JsonOptions::none).toStyledString());
 
-    return value.as_object();
+        return value.as_object();
+    }
 }
 
 std::pair<boost::json::object, boost::json::object>
-toExpandedJson(Backend::TransactionAndMetadata const& blobs)
+toExpandedJson(
+    Backend::TransactionAndMetadata const& blobs,
+    BackendInterface const& backend)
 {
     auto [txn, meta] = deserializeTxPlusMeta(blobs, blobs.ledgerSequence);
-    auto txnJson = toJson(*txn);
+    auto txnJson = toJson(*txn, backend);
     auto metaJson = toJson(*meta);
     insertDeliveredAmount(metaJson, txn, meta);
     return {txnJson, metaJson};
@@ -379,8 +388,18 @@ toBoostJson(Json::Value const& value)
 }
 
 boost::json::object
-toJson(ripple::SLE const& sle)
+toJson(ripple::SLE const& sle, BackendInterface const& backend)
 {
+    auto start = std::chrono::system_clock::now();
+    auto obj = backend.jsonCache().get(sle.key());
+    auto end = std::chrono::system_clock::now();
+    BOOST_LOG_TRIVIAL(debug)
+        << __func__ << " json cache operation took "
+        << std::chrono::duration_cast<std::chrono::microseconds>(end - start)
+               .count()
+        << " microseconds. hit = " << obj.has_value();
+    if (obj)
+        return *obj;
     boost::json::value value = boost::json::parse(
         sle.getJson(ripple::JsonOptions::none).toStyledString());
     if (sle.getType() == ripple::ltACCOUNT_ROOT)
@@ -394,6 +413,7 @@ toJson(ripple::SLE const& sle)
                 str(boost::format("http://www.gravatar.com/avatar/%s") % md5);
         }
     }
+    backend.jsonCache().put(sle.key(), value.as_object());
     return value.as_object();
 }
 
@@ -1047,6 +1067,7 @@ postProcessOrderBook(
 {
     boost::json::array jsonOffers;
 
+    jsonOffers.reserve(offers.size());
     std::map<ripple::AccountID, ripple::STAmount> umBalance;
 
     bool globalFreeze =
@@ -1109,7 +1130,7 @@ postProcessOrderBook(
                 }
             }
 
-            boost::json::object offerJson = toJson(offer);
+            boost::json::object offerJson = toJson(offer, backend);
 
             ripple::STAmount saTakerGetsFunded;
             ripple::STAmount saOwnerFundsLimit = saOwnerFunds;
@@ -1160,7 +1181,7 @@ postProcessOrderBook(
 
             offerJson["quality"] = dirRate.getText();
 
-            jsonOffers.push_back(offerJson);
+            jsonOffers.push_back(std::move(offerJson));
         }
         catch (std::exception const& e)
         {

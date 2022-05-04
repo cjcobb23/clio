@@ -87,7 +87,8 @@ doBookOffers(Context const& context)
     auto end = std::chrono::system_clock::now();
 
     BOOST_LOG_TRIVIAL(warning)
-        << "Time loading books: " << ((end - start).count() / 1000000000.0);
+        << "Time loading books: " << ((end - start).count() / 1000000000.0)
+        << " - request = " << request;
 
     response["ledger_hash"] = ripple::strHex(lgrInfo.hash);
     response["ledger_index"] = lgrInfo.seq;
@@ -95,11 +96,11 @@ doBookOffers(Context const& context)
     response["offers"] = postProcessOrderBook(
         offers, book, takerID, *context.backend, lgrInfo.seq, context.yield);
 
-    end = std::chrono::system_clock::now();
+    auto end2 = std::chrono::system_clock::now();
 
     BOOST_LOG_TRIVIAL(warning)
         << "Time transforming to json: "
-        << ((end - start).count() / 1000000000.0) << " - request = " << request;
+        << ((end2 - end).count() / 1000000000.0) << " - request = " << request;
 
     if (retCursor)
         response["marker"] = ripple::strHex(*retCursor);
