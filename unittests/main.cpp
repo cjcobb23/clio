@@ -1042,8 +1042,28 @@ TEST(Backend, jsonCache)
         boost::json::object obj;
         obj["foo"] = i + 10;
         cache.put(key, obj);
+        map[key] = obj;
         ASSERT_FALSE(cache.get(ripple::uint256{i + 1}).has_value());
     }
+    ASSERT_TRUE(cache.get(ripple::uint256{11}).has_value());
+    cache.put(++key, obj);
+    map[key] = obj;
+    ASSERT_TRUE(cache.get(ripple::uint256{11}).has_value());
+    ASSERT_FALSE(cache.get(ripple::uint256{12}).has_value());
+    for (auto [key, val] : map)
+    {
+        if (auto obj = cache.get(key))
+            ASSERT_EQ(*obj, val);
+    }
+    ASSERT_EQ(cache.size(), 10);
+    std::vector<LedgerObject> diff;
+
+    diff.emplace_back(key, Blob{});
+    diff.emplace_back(--key, Blob{});
+    cache.invalidate(diff);
+    ASSERT_FALSE(cache.get(key).has_value());
+    ASSERT_FALSE(cache.get(++key).has_value());
+    ASSERT_EQ(cache.size(), 8);
 }
 
 TEST(Backend, cache)
