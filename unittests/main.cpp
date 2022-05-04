@@ -976,15 +976,12 @@ TEST(BackendTest, Basic)
 
                 for (auto [seq, diff] : state)
                 {
-                    std::cout << "flatteneing" << std::endl;
                     auto flat = flatten(seq);
-                    std::cout << "flattened" << std::endl;
                     checkLedger(
                         lgrInfos[seq],
                         allTxns[seq],
                         flat,
                         flattenAccountTx(seq));
-                    std::cout << "checked" << std::endl;
                 }
             }
 
@@ -994,6 +991,59 @@ TEST(BackendTest, Basic)
 
     ioc.run();
     EXPECT_EQ(done, true);
+}
+
+TEST(Backend, jsonCache)
+{
+    using namespace Backend;
+    boost::log::core::get()->set_filter(
+        boost::log::trivial::severity >= boost::log::trivial::warning);
+    JSONCache cache{10};
+    ASSERT_EQ(cache.size(), 0);
+    ripple::uint256 key;
+    ASSERT_FALSE(cache.get(key).has_value());
+    boost::json::object obj;
+    obj["foo"] = "bar";
+    cache.put(key, obj);
+    ASSERT_EQ(cache.size(), 1);
+    ASSERT_TRUE(cache.get(key).has_value());
+    ASSERT_EQ(*cache.get(key), obj);
+    std::unordered_map<
+        ripple::uint256,
+        boost::json::object,
+        ripple::hardened_hash<>>
+        map;
+    for (size_t i = 0; i < 10; ++i)
+    {
+        key++;
+        boost::json::object obj;
+        obj["foo"] = i;
+        cache.put(key, obj);
+        map[key] = obj;
+    }
+    ASSERT_EQ(cache.size(), 10);
+    ASSERT_EQ(cache.size(), map.size());
+    ASSERT_FALSE(cache.get({}).has_value());
+    for (auto [key, val] : map)
+    {
+        ASSERT_TRUE(cache.get(key).has_value());
+        ASSERT_EQ(cache.get(key), val);
+    }
+    key = {};
+    for (size_t i = 0; i < 10; ++i)
+    {
+        key++;
+        cache.get(key);
+    }
+    for (size_t i = 0; i < 10; ++i)
+    {
+        key++;
+        std::cout << ripple::strHex(key) << std::endl;
+        boost::json::object obj;
+        obj["foo"] = i + 10;
+        cache.put(key, obj);
+        ASSERT_FALSE(cache.get(ripple::uint256{i + 1}).has_value());
+    }
 }
 
 TEST(Backend, cache)
