@@ -1001,13 +1001,13 @@ TEST(Backend, jsonCache)
     JSONCache cache{10};
     ASSERT_EQ(cache.size(), 0);
     ripple::uint256 key;
-    ASSERT_FALSE(cache.get(key).has_value());
+    ASSERT_FALSE(cache.getLedgerObject(key).has_value());
     boost::json::object obj;
     obj["foo"] = "bar";
     cache.put(key, obj);
     ASSERT_EQ(cache.size(), 1);
-    ASSERT_TRUE(cache.get(key).has_value());
-    ASSERT_EQ(*cache.get(key), obj);
+    ASSERT_TRUE(cache.getLedgerObject(key).has_value());
+    ASSERT_EQ(*cache.getLedgerObject(key), obj);
     std::unordered_map<
         ripple::uint256,
         boost::json::object,
@@ -1023,17 +1023,17 @@ TEST(Backend, jsonCache)
     }
     ASSERT_EQ(cache.size(), 10);
     ASSERT_EQ(cache.size(), map.size());
-    ASSERT_FALSE(cache.get({}).has_value());
+    ASSERT_FALSE(cache.getLedgerObject({}).has_value());
     for (auto [key, val] : map)
     {
-        ASSERT_TRUE(cache.get(key).has_value());
-        ASSERT_EQ(cache.get(key), val);
+        ASSERT_TRUE(cache.getLedgerObject(key).has_value());
+        ASSERT_EQ(cache.getLedgerObject(key), val);
     }
     key = {};
     for (size_t i = 0; i < 10; ++i)
     {
         key++;
-        cache.get(key);
+        cache.getLedgerObject(key);
     }
     for (size_t i = 0; i < 10; ++i)
     {
@@ -1043,16 +1043,16 @@ TEST(Backend, jsonCache)
         obj["foo"] = i + 10;
         cache.put(key, obj);
         map[key] = obj;
-        ASSERT_FALSE(cache.get(ripple::uint256{i + 1}).has_value());
+        ASSERT_FALSE(cache.getLedgerObject(ripple::uint256{i + 1}).has_value());
     }
-    ASSERT_TRUE(cache.get(ripple::uint256{11}).has_value());
+    ASSERT_TRUE(cache.getLedgerObject(ripple::uint256{11}).has_value());
     cache.put(++key, obj);
     map[key] = obj;
-    ASSERT_TRUE(cache.get(ripple::uint256{11}).has_value());
-    ASSERT_FALSE(cache.get(ripple::uint256{12}).has_value());
+    ASSERT_TRUE(cache.getLedgerObject(ripple::uint256{11}).has_value());
+    ASSERT_FALSE(cache.getLedgerObject(ripple::uint256{12}).has_value());
     for (auto [key, val] : map)
     {
-        if (auto obj = cache.get(key))
+        if (auto obj = cache.getLedgerObject(key))
             ASSERT_EQ(*obj, val);
     }
     ASSERT_EQ(cache.size(), 10);
@@ -1061,8 +1061,8 @@ TEST(Backend, jsonCache)
     diff.emplace_back(key, Blob{});
     diff.emplace_back(--key, Blob{});
     cache.invalidate(diff);
-    ASSERT_FALSE(cache.get(key).has_value());
-    ASSERT_FALSE(cache.get(++key).has_value());
+    ASSERT_FALSE(cache.getLedgerObject(key).has_value());
+    ASSERT_FALSE(cache.getLedgerObject(++key).has_value());
     ASSERT_EQ(cache.size(), 8);
 }
 

@@ -346,9 +346,13 @@ toExpandedJson(
     BackendInterface const& backend)
 {
     auto [txn, meta] = deserializeTxPlusMeta(blobs, blobs.ledgerSequence);
+    if (auto pair = backend.jsonCache().getTxn(txn->getTransactionID()))
+        return *pair;
     auto txnJson = toJson(*txn, backend);
     auto metaJson = toJson(*meta);
     insertDeliveredAmount(metaJson, txn, meta);
+    backend.jsonCache().put(
+        txn->getTransactionID(), std::pair{txnJson, metaJson});
     return {txnJson, metaJson};
 }
 
@@ -391,7 +395,7 @@ boost::json::object
 toJson(ripple::SLE const& sle, BackendInterface const& backend)
 {
     auto start = std::chrono::system_clock::now();
-    auto obj = backend.jsonCache().get(sle.key());
+    auto obj = backend.jsonCache().getLedgerObject(sle.key());
     auto end = std::chrono::system_clock::now();
     BOOST_LOG_TRIVIAL(debug)
         << __func__ << " json cache operation took "
