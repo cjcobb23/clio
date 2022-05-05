@@ -2,6 +2,22 @@
 #include <ripple/protocol/STLedgerEntry.h>
 #include <backend/BackendInterface.h>
 namespace Backend {
+
+size_t
+getJsonCacheSize(boost::json::object const& config)
+{
+    try
+    {
+        return config.at("json_cache").as_object().at("max_size").as_int64();
+    }
+    catch (std::exception const& e)
+    {
+        assert(false);
+        // default, should be defined somewhere besides here
+        return 65536;
+    }
+}
+
 bool
 BackendInterface::finishWrites(std::uint32_t const ledgerSequence)
 {

@@ -80,6 +80,9 @@ synchronousAndRetryOnTimeout(F&& f)
     return retryOnTimeout([&]() { return synchronous(f); });
 }
 
+size_t
+getJsonCacheSize(boost::json::object const& config);
+
 class BackendInterface
 {
 protected:
@@ -92,7 +95,8 @@ protected:
     mutable std::mutex mutex_;
 
 public:
-    BackendInterface(boost::json::object const& config) : jsonCache_(65536)
+    BackendInterface(boost::json::object const& config)
+        : jsonCache_(getJsonCacheSize(config))
     {
     }
     virtual ~BackendInterface()

@@ -19,6 +19,11 @@ make_Backend(boost::asio::io_context& ioc, boost::json::object const& config)
         readOnly = config.at("read_only").as_bool();
 
     auto type = dbConfig.at("type").as_string();
+    // this is a sort of hack. We need to make the config just globally
+    // accessible
+    if (config.contains("json_cache") && config.at("json_cache").is_object())
+        dbConfig.at(type).as_object()["json_cache"] =
+            config.at("json_cache").as_object();
 
     std::shared_ptr<BackendInterface> backend = nullptr;
 

@@ -1093,6 +1093,82 @@ TEST(Backend, jsonCache)
             ASSERT_EQ(*cache.getLedgerObject(key), val);
     }
     ASSERT_EQ(count, 5);
+
+    size_t numLoops = 20000;
+
+    std::thread t{[&]() {
+        for (size_t i = 0; i < numLoops; ++i)
+        {
+            for (auto [key, val] : map)
+                if (cache.contains(key))
+                    ASSERT_EQ(*cache.getLedgerObject(key), val);
+            for (auto [key, val] : txnMap)
+                if (cache.contains(key))
+                    ASSERT_EQ(*cache.getTxn(key), val);
+        }
+    }};
+    std::thread t2{[&]() {
+        for (size_t i = 0; i < numLoops; ++i)
+        {
+            for (auto [key, val] : map)
+                if (cache.contains(key))
+                    ASSERT_EQ(*cache.getLedgerObject(key), val);
+            for (auto [key, val] : txnMap)
+                if (cache.contains(key))
+                    ASSERT_EQ(*cache.getTxn(key), val);
+        }
+    }};
+    t.join();
+    t2.join();
+
+    JSONCache bigCache{1000};
+
+    map.clear();
+    txnMap.clear();
+    std::mutex mtx;
+
+    key = {};
+
+    size_t inner = 1000;
+    size_t outer = 100;
+    for (size_t j = 0; j < inner; ++j)
+    {
+        ++key;
+        boost::json::object obj;
+        obj["foo"] = std::to_string(j);
+        map[key] = obj;
+        bigCache.put(key, obj);
+    }
+    key = {};
+    std::thread putter{[&]() {
+        for (size_t i = 0; i < outer; ++i)
+        {
+            key = {};
+            for (size_t j = 0; j < inner; ++j)
+            {
+                ++key;
+                std::unique_lock lck{mtx};
+                boost::json::object obj;
+                obj["foo"] = std::to_string(i) + std::to_string(j);
+                bigCache.put(key, obj);
+                map[key] = obj;
+            }
+        }
+    }};
+    std::thread getter{[&]() {
+        for (size_t i = 0; i < outer; ++i)
+        {
+            for (auto [key, val] : map)
+            {
+                std::unique_lock lck{mtx};
+                val = map[key];
+                if (bigCache.contains(key))
+                    ASSERT_EQ(*bigCache.getLedgerObject(key), val);
+            }
+        }
+    }};
+    putter.join();
+    getter.join();
 }
 
 TEST(Backend, cache)
@@ -1789,31 +1865,38 @@ TEST(Backend, cacheIntegration)
                 backend->cache().setFull();
 
                 std::string rawHeader =
-                    "03C3141A01633CD656F91B4EBB5EB89B791BD34DBC8A04BB6F407C5335"
+                    "03C3141A01633CD656F91B4EBB5EB89B791BD34DBC8A04BB6F407C"
+                    "5335"
                     "BC54351E"
                     "DD73"
-                    "3898497E809E04074D14D271E4832D7888754F9230800761563A292FA2"
+                    "3898497E809E04074D14D271E4832D7888754F9230800761563A29"
+                    "2FA2"
                     "315A6DB6"
                     "FE30"
-                    "CC5909B285080FCD6773CC883F9FE0EE4D439340AC592AADB973ED3CF5"
+                    "CC5909B285080FCD6773CC883F9FE0EE4D439340AC592AADB973ED"
+                    "3CF5"
                     "3E2232B3"
                     "3EF5"
-                    "7CECAC2816E3122816E31A0A00F8377CD95DFA484CFAE282656A58CE5A"
+                    "7CECAC2816E3122816E31A0A00F8377CD95DFA484CFAE282656A58"
+                    "CE5A"
                     "A29652EF"
                     "FD80"
                     "AC59CD91416E4E13DBBE";
                 // this account is not related to the above transaction and
                 // metadata
                 std::string accountHex =
-                    "1100612200000000240480FDBC2503CE1A872D0000000555516931B2AD"
+                    "1100612200000000240480FDBC2503CE1A872D0000000555516931"
+                    "B2AD"
                     "018EFFBE"
                     "17C5"
-                    "C9DCCF872F36837C2C6136ACF80F2A24079CF81FD0624000000005FF0E"
+                    "C9DCCF872F36837C2C6136ACF80F2A24079CF81FD0624000000005"
+                    "FF0E"
                     "07811422"
                     "52F3"
                     "28CF91263417762570D67220CCB33B1370";
                 std::string accountIndexHex =
-                    "E0311EB450B6177F969B94DBDDA83E99B7A0576ACD9079573876F16C0C"
+                    "E0311EB450B6177F969B94DBDDA83E99B7A0576ACD9079573876F1"
+                    "6C0C"
                     "004F06";
 
                 auto hexStringToBinaryString = [](auto const& hex) {
