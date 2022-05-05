@@ -81,6 +81,8 @@ doServerInfo(Context const& context)
     cache["latest_ledger_seq"] =
         context.backend->cache().latestLedgerSequence();
 
+    response["json_cache"] = context.backend->jsonCache().info();
+
     response["etl"] = context.etl->getInfo();
 
     response["note"] =

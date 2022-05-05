@@ -1064,6 +1064,35 @@ TEST(Backend, jsonCache)
     ASSERT_FALSE(cache.getLedgerObject(key).has_value());
     ASSERT_FALSE(cache.getLedgerObject(++key).has_value());
     ASSERT_EQ(cache.size(), 8);
+
+    std::unordered_map<
+        ripple::uint256,
+        std::pair<boost::json::object, boost::json::object>,
+        ripple::hardened_hash<>>
+        txnMap;
+    for (size_t i = 0; i < 5; ++i)
+    {
+        key++;
+        boost::json::object obj1;
+        obj1["foo"] = i;
+        boost::json::object obj2;
+        obj2["bar"] = i;
+        cache.put(key, std::pair{obj1, obj2});
+        txnMap[key] = {obj1, obj2};
+    }
+
+    for (auto [key, val] : txnMap)
+    {
+        ASSERT_TRUE(cache.contains(key));
+        ASSERT_EQ(*cache.getTxn(key), val);
+    }
+    size_t count = 0;
+    for (auto [key, val] : map)
+    {
+        if (cache.contains(key) && ++count)
+            ASSERT_EQ(*cache.getLedgerObject(key), val);
+    }
+    ASSERT_EQ(count, 5);
 }
 
 TEST(Backend, cache)

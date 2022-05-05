@@ -346,13 +346,34 @@ toExpandedJson(
     BackendInterface const& backend)
 {
     auto [txn, meta] = deserializeTxPlusMeta(blobs, blobs.ledgerSequence);
-    if (auto pair = backend.jsonCache().getTxn(txn->getTransactionID()))
+    auto start = std::chrono::system_clock::now();
+    auto pair = backend.jsonCache().getTxn(txn->getTransactionID());
+    auto end = std::chrono::system_clock::now();
+    BOOST_LOG_TRIVIAL(debug)
+        << __func__ << " json cache operation took "
+        << std::chrono::duration_cast<std::chrono::microseconds>(end - start)
+               .count()
+        << " microseconds. hit = " << pair.has_value();
+
+    if (pair)
         return *pair;
     auto txnJson = toJson(*txn, backend);
     auto metaJson = toJson(*meta);
     insertDeliveredAmount(metaJson, txn, meta);
+    auto end2 = std::chrono::system_clock::now();
+    BOOST_LOG_TRIVIAL(debug)
+        << __func__ << " json serialization took "
+        << std::chrono::duration_cast<std::chrono::microseconds>(end2 - end)
+               .count()
+        << " microseconds";
     backend.jsonCache().put(
         txn->getTransactionID(), std::pair{txnJson, metaJson});
+    auto end3 = std::chrono::system_clock::now();
+    BOOST_LOG_TRIVIAL(debug)
+        << __func__ << " json cache insert took "
+        << std::chrono::duration_cast<std::chrono::microseconds>(end3 - end2)
+               .count()
+        << " microseconds";
     return {txnJson, metaJson};
 }
 
@@ -417,7 +438,19 @@ toJson(ripple::SLE const& sle, BackendInterface const& backend)
                 str(boost::format("http://www.gravatar.com/avatar/%s") % md5);
         }
     }
+    auto end2 = std::chrono::system_clock::now();
+    BOOST_LOG_TRIVIAL(debug)
+        << __func__ << " json serialization took "
+        << std::chrono::duration_cast<std::chrono::microseconds>(end2 - end)
+               .count()
+        << " microseconds";
     backend.jsonCache().put(sle.key(), value.as_object());
+    auto end3 = std::chrono::system_clock::now();
+    BOOST_LOG_TRIVIAL(debug)
+        << __func__ << " json cache insert took "
+        << std::chrono::duration_cast<std::chrono::microseconds>(end3 - end2)
+               .count()
+        << " microseconds";
     return value.as_object();
 }
 

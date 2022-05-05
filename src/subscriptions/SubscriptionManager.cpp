@@ -211,9 +211,29 @@ SubscriptionManager::pubTransaction(
 {
     auto [tx, meta] = RPC::deserializeTxPlusMeta(blobs, lgrInfo.seq);
     boost::json::object pubObj;
-    pubObj["transaction"] = RPC::toJson(*tx, *backend_);
-    pubObj["meta"] = RPC::toJson(*meta);
-    RPC::insertDeliveredAmount(pubObj["meta"].as_object(), tx, meta);
+    if (auto pair = backend_->jsonCache().getTxn(tx->getTransactionID()))
+    {
+        pubObj["trasaction"] = pair->first;
+        pubObj["meta"] = pair->second;
+    }
+    else
+    {
+        pubObj["transaction"] = RPC::toJson(*tx, *backend_);
+        pubObj["meta"] = RPC::toJson(*meta);
+        RPC::insertDeliveredAmount(pubObj["meta"].as_object(), tx, meta);
+        auto start = std::chrono::system_clock::now();
+        backend_->jsonCache().put(
+            tx->getTransactionID(),
+            std::pair{
+                pubObj["transaction"].as_object(), pubObj["meta"].as_object()});
+        auto end = std::chrono::system_clock::now();
+        BOOST_LOG_TRIVIAL(debug)
+            << __func__ << " json cache insert took "
+            << std::chrono::duration_cast<std::chrono::microseconds>(
+                   end - start)
+                   .count()
+            << " microseconds";
+    }
     pubObj["type"] = "transaction";
     pubObj["validated"] = true;
     pubObj["status"] = "closed";

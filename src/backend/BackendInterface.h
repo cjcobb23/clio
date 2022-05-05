@@ -99,14 +99,7 @@ public:
     {
     }
 
-    // *** public read methods ***
-    // All of these reads methods can throw DatabaseTimeout. When writing code
-    // in an RPC handler, this exception does not need to be caught: when an RPC
-    // results in a timeout, an error is returned to the client
 public:
-    // *** ledger methods
-    //
-
     SimpleCache const&
     cache() const
     {
@@ -129,6 +122,14 @@ public:
     {
         return jsonCache_;
     }
+
+    // *** public read methods ***
+    // All of these reads methods can throw DatabaseTimeout. When writing code
+    // in an RPC handler, this exception does not need to be caught: when an RPC
+    // results in a timeout, an error is returned to the client
+
+    // *** ledger methods
+    //
 
     virtual std::optional<ripple::LedgerInfo>
     fetchLedgerBySequence(
