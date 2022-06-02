@@ -61,6 +61,14 @@ isDirNode(T const& object)
     return spaceKey == 0x0064;
 }
 
+template <class T>
+inline bool
+isNFTPage(T const& object)
+{
+    short spaceKey = (object.data()[1] << 8) | object.data()[2];
+    return spaceKey == 0x0050;
+}
+
 template <class T, class R>
 inline bool
 isBookDir(T const& key, R const& object)
@@ -90,6 +98,19 @@ getBookBase(T const& key)
     assert(key.size() == ripple::uint256::size());
     ripple::uint256 ret;
     for (size_t i = 0; i < 24; ++i)
+    {
+        ret.data()[i] = key.data()[i];
+    }
+    return ret;
+}
+
+template <class T>
+inline ripple::uint256
+getNFTPageMin(T const& key)
+{
+    assert(key.size() == ripple::uint256::size());
+    ripple::uint256 ret;
+    for (size_t i = 0; i < 20; ++i)
     {
         ret.data()[i] = key.data()[i];
     }

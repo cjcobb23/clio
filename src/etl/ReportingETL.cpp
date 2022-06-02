@@ -384,40 +384,49 @@ ReportingETL::buildNextLedger(org::xrpl::rpc::v1::GetLedgerResponse& rawData)
                     "Cache is not full, but object neighbors were not "
                     "included");
             auto blob = obj.mutable_data();
-            bool checkBookBase = false;
-            bool isDeleted = (blob->size() == 0);
-            if (isDeleted)
-            {
-                auto old = backend_->cache().get(*key, lgrInfo.seq - 1);
-                assert(old);
-                checkBookBase = isBookDir(*key, *old);
-            }
-            else
-                checkBookBase = isBookDir(*key, *blob);
-            if (checkBookBase)
-            {
-                BOOST_LOG_TRIVIAL(debug)
-                    << __func__
-                    << " is book dir. key = " << ripple::strHex(*key);
-                auto bookBase = getBookBase(*key);
-                auto oldFirstDir =
-                    backend_->cache().getSuccessor(bookBase, lgrInfo.seq - 1);
-                assert(oldFirstDir);
-                // We deleted the first directory, or we added a directory prior
-                // to the old first directory
-                if ((isDeleted && key == oldFirstDir->key) ||
-                    (!isDeleted && key < oldFirstDir->key))
+            auto insertDummySuccessorObjects = [&](auto&& doCheck,
+                                                   auto&& getBase) {
+                bool check = false;
+                bool isDeleted = (blob->size() == 0);
+                if (isDeleted)
+                {
+                    auto old = backend_->cache().get(*key, lgrInfo.seq - 1);
+                    assert(old);
+                    check = doCheck(*key, *old);
+                }
+                else
+                    check = doCheck(*key, *blob);
+                if (check)
                 {
                     BOOST_LOG_TRIVIAL(debug)
                         << __func__
-                        << " Need to recalculate book base successor. base = "
-                        << ripple::strHex(bookBase)
-                        << " - key = " << ripple::strHex(*key)
-                        << " - isDeleted = " << isDeleted
-                        << " - seq = " << lgrInfo.seq;
-                    bookSuccessorsToCalculate.insert(bookBase);
+                        << " is book dir. key = " << ripple::strHex(*key);
+                    auto base = getBase(*key);
+                    auto oldFirstDir =
+                        backend_->cache().getSuccessor(base, lgrInfo.seq - 1);
+                    assert(oldFirstDir);
+                    // We deleted the first directory, or we added a directory
+                    // prior to the old first directory
+                    if ((isDeleted && key == oldFirstDir->key) ||
+                        (!isDeleted && key < oldFirstDir->key))
+                    {
+                        BOOST_LOG_TRIVIAL(debug)
+                            << __func__
+                            << " Need to recalculate book successor. base = "
+                            << ripple::strHex(base)
+                            << " - key = " << ripple::strHex(*key)
+                            << " - isDeleted = " << isDeleted
+                            << " - seq = " << lgrInfo.seq;
+                        bookSuccessorsToCalculate.insert(base);
+                    }
                 }
-            }
+            };
+            insertDummySuccessorObjects(
+                [](auto& key, auto& blob) { return isBookDir(key, blob); },
+                [](auto& blob) { return getBookBase(blob); });
+            insertDummySuccessorObjects(
+                [](auto& key, auto& blob) { return isNFTPage(key); },
+                [](auto& blob) { return getNFTPageMin(blob); });
         }
         if (obj.mod_type() == org::xrpl::rpc::v1::RawLedgerObject::MODIFIED)
             modified.insert(*key);
