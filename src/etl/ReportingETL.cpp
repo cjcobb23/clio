@@ -954,52 +954,60 @@ ReportingETL::loadCache(uint32_t seq)
     std::atomic_uint* numRemaining = new std::atomic_uint{cursors.size() - 1};
 
     auto startTime = std::chrono::system_clock::now();
-    for (size_t i = 0; i < cursors.size() - 1; ++i)
-    {
-        std::optional<ripple::uint256> start = cursors[i];
-        std::optional<ripple::uint256> end = cursors[i + 1];
-        boost::asio::spawn(
-            ioContext_,
-            [this, seq, start, end, numRemaining, startTime](
-                boost::asio::yield_context yield) {
-                std::optional<ripple::uint256> cursor = start;
-                while (true)
-                {
-                    auto res =
-                        Backend::retryOnTimeout([this, seq, &cursor, &yield]() {
-                            return backend_->fetchLedgerPage(
-                                cursor, seq, 256, false, yield);
-                        });
-                    backend_->cache().update(res.objects, seq, true);
-                    if (!res.cursor || (end && *(res.cursor) > *end))
-                        break;
-                    BOOST_LOG_TRIVIAL(debug)
-                        << "Loading cache. cache size = "
-                        << backend_->cache().size()
-                        << " - cursor = " << ripple::strHex(res.cursor.value());
-                    cursor = std::move(res.cursor);
-                }
-                if (--(*numRemaining) == 0)
-                {
-                    auto endTime = std::chrono::system_clock::now();
-                    auto duration =
-                        std::chrono::duration_cast<std::chrono::seconds>(
-                            endTime - startTime);
-                    BOOST_LOG_TRIVIAL(info)
-                        << "Finished loading cache. cache size = "
-                        << backend_->cache().size() << ". Took "
-                        << duration.count() << " seconds";
-                    backend_->cache().setFull();
-                    delete numRemaining;
-                }
-                else
-                {
-                    BOOST_LOG_TRIVIAL(info)
-                        << "Finished a cursor. num remaining = "
-                        << *numRemaining;
-                }
-            });
-    }
+    std::thread downloader{[this, seq, cursors, numRemaining, startTime]() {
+        std::atomic_int markers = 0;
+        for (size_t i = 0; i < cursors.size() - 1; ++i)
+        {
+            std::optional<ripple::uint256> start = cursors[i];
+            std::optional<ripple::uint256> end = cursors[i + 1];
+            markers.wait(16);
+            ++markers;
+            boost::asio::spawn(
+                ioContext_,
+                [this, seq, start, end, numRemaining, startTime, &markers](
+                    boost::asio::yield_context yield) {
+                    std::optional<ripple::uint256> cursor = start;
+                    while (true)
+                    {
+                        auto res = Backend::retryOnTimeout(
+                            [this, seq, &cursor, &yield]() {
+                                return backend_->fetchLedgerPage(
+                                    cursor, seq, 256, false, yield);
+                            });
+                        backend_->cache().update(res.objects, seq, true);
+                        if (!res.cursor || (end && *(res.cursor) > *end))
+                            break;
+                        BOOST_LOG_TRIVIAL(debug)
+                            << "Loading cache. cache size = "
+                            << backend_->cache().size() << " - cursor = "
+                            << ripple::strHex(res.cursor.value());
+                        cursor = std::move(res.cursor);
+                    }
+                    --markers;
+                    markers.notify_one();
+                    if (--(*numRemaining) == 0)
+                    {
+                        auto endTime = std::chrono::system_clock::now();
+                        auto duration =
+                            std::chrono::duration_cast<std::chrono::seconds>(
+                                endTime - startTime);
+                        BOOST_LOG_TRIVIAL(info)
+                            << "Finished loading cache. cache size = "
+                            << backend_->cache().size() << ". Took "
+                            << duration.count() << " seconds";
+                        backend_->cache().setFull();
+                        delete numRemaining;
+                    }
+                    else
+                    {
+                        BOOST_LOG_TRIVIAL(info)
+                            << "Finished a cursor. num remaining = "
+                            << *numRemaining;
+                    }
+                });
+        }
+    }};
+    downloader.detach();
     // If loading synchronously, poll cache until full
     while (cacheLoadStyle_ == CacheLoadStyle::SYNC &&
            !backend_->cache().isFull())
