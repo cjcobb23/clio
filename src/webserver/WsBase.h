@@ -359,7 +359,7 @@ public:
         std::string responseStr = boost::json::serialize(response);
         if (!dosGuard_.add(*ip, responseStr.size()))
         {
-            warnings.emplace_back("Too many requests");
+            warnings.emplace_back("load");
             response["warnings"] = warnings;
             // reserialize if we need to include this warning
             responseStr = boost::json::serialize(response);
@@ -396,7 +396,7 @@ public:
         };
         if (!dosGuard_.isOk(*ip))
         {
-            sendError("Too many requests. Slow down");
+            sendError(RPC::Error::rpcSLOW_DOWN);
         }
         else
         {
@@ -406,7 +406,7 @@ public:
                         shared_this->handle_request(std::move(m), yield);
                     },
                     dosGuard_.isWhiteListed(*ip)))
-                sendError("Server overloaded");
+                sendError(RPC::Error::rpcTOO_BUSY);
         }
 
         do_read();
