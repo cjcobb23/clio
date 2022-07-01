@@ -52,7 +52,10 @@ private:
 
     // number of diffs to use to generate cursors to traverse the ledger in
     // parallel during initial cache download
-    size_t numDiffs_ = 1;
+    size_t numCacheDiffs_ = 32;
+    // number of markers to use at one time to traverse the ledger in parallel
+    // during initial cache download
+    size_t numCacheMarkers_ = 16;
 
     std::thread worker_;
     boost::asio::io_context& ioContext_;

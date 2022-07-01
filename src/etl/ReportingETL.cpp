@@ -916,7 +916,7 @@ ReportingETL::loadCache(uint32_t seq)
         a.insert(std::end(a), std::begin(b), std::end(b));
     };
 
-    for (size_t i = 0; i < numDiffs_; ++i)
+    for (size_t i = 0; i < numCacheDiffs_; ++i)
     {
         append(diff, Backend::synchronousAndRetryOnTimeout([&](auto yield) {
                    return backend_->fetchLedgerDiff(seq - i, yield);
@@ -951,22 +951,28 @@ ReportingETL::loadCache(uint32_t seq)
         << "Loading cache. num cursors = " << cursors.size() - 1;
     BOOST_LOG_TRIVIAL(debug) << __func__ << " cursors = " << cursorStr.str();
 
-    std::atomic_uint* numRemaining = new std::atomic_uint{cursors.size() - 1};
-
-    auto startTime = std::chrono::system_clock::now();
-    std::thread downloader{[this, seq, cursors, numRemaining, startTime]() {
+    std::thread downloader{[this, seq, cursors]() {
+        auto startTime = std::chrono::system_clock::now();
         std::atomic_int markers = 0;
+        std::atomic_int numRemaining = cursors.size() - 1;
         for (size_t i = 0; i < cursors.size() - 1; ++i)
         {
             std::optional<ripple::uint256> start = cursors[i];
             std::optional<ripple::uint256> end = cursors[i + 1];
-            markers.wait(16);
+            markers.wait(numCacheMarkers_);
             ++markers;
             boost::asio::spawn(
                 ioContext_,
-                [this, seq, start, end, numRemaining, startTime, &markers](
+                [this, seq, start, end, &numRemaining, startTime, &markers](
                     boost::asio::yield_context yield) {
                     std::optional<ripple::uint256> cursor = start;
+                    std::string cursorStr = cursor.has_value()
+                        ? ripple::strHex(cursor.value())
+                        : ripple::strHex(Backend::firstKey);
+                    BOOST_LOG_TRIVIAL(debug)
+                        << "Starting a cursor: " << cursorStr
+                        << " markers = " << markers;
+
                     while (true)
                     {
                         auto res = Backend::retryOnTimeout(
@@ -980,12 +986,15 @@ ReportingETL::loadCache(uint32_t seq)
                         BOOST_LOG_TRIVIAL(debug)
                             << "Loading cache. cache size = "
                             << backend_->cache().size() << " - cursor = "
-                            << ripple::strHex(res.cursor.value());
+                            << ripple::strHex(res.cursor.value())
+                            << " start = " << cursorStr
+                            << " markers = " << markers;
+
                         cursor = std::move(res.cursor);
                     }
                     --markers;
                     markers.notify_one();
-                    if (--(*numRemaining) == 0)
+                    if (--numRemaining == 0)
                     {
                         auto endTime = std::chrono::system_clock::now();
                         auto duration =
@@ -996,13 +1005,13 @@ ReportingETL::loadCache(uint32_t seq)
                             << backend_->cache().size() << ". Took "
                             << duration.count() << " seconds";
                         backend_->cache().setFull();
-                        delete numRemaining;
                     }
                     else
                     {
                         BOOST_LOG_TRIVIAL(info)
                             << "Finished a cursor. num remaining = "
-                            << *numRemaining;
+                            << numRemaining << " start = " << cursorStr
+                            << " markers = " << markers;
                     }
                 });
         }
@@ -1119,7 +1128,11 @@ ReportingETL::ReportingETL(
         }
         if (cache.contains("num_diffs") && cache.at("num_diffs").as_int64())
         {
-            numDiffs_ = cache.at("num_diffs").as_int64();
+            numCacheDiffs_ = cache.at("num_diffs").as_int64();
+        }
+        if (cache.contains("num_markers") && cache.at("num_markers").as_int64())
+        {
+            numCacheMarkers_ = cache.at("num_markers").as_int64();
         }
     }
 }
