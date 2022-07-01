@@ -56,6 +56,7 @@ private:
     // number of markers to use at one time to traverse the ledger in parallel
     // during initial cache download
     size_t numCacheMarkers_ = 16;
+    std::thread cacheDownloader_;
 
     std::thread worker_;
     boost::asio::io_context& ioContext_;
@@ -304,6 +305,8 @@ public:
 
         if (worker_.joinable())
             worker_.join();
+        if (cacheDownloader_.joinable())
+            cacheDownloader_.join();
 
         BOOST_LOG_TRIVIAL(debug) << "Joined ReportingETL worker thread";
     }

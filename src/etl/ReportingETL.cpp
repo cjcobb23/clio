@@ -951,7 +951,7 @@ ReportingETL::loadCache(uint32_t seq)
         << "Loading cache. num cursors = " << cursors.size() - 1;
     BOOST_LOG_TRIVIAL(debug) << __func__ << " cursors = " << cursorStr.str();
 
-    std::thread downloader{[this, seq, cursors]() {
+    cacheDownloader_ = std::thread{[this, seq, cursors]() {
         auto startTime = std::chrono::system_clock::now();
         std::atomic_int markers = 0;
         std::atomic_int numRemaining = cursors.size() - 1;
@@ -973,7 +973,7 @@ ReportingETL::loadCache(uint32_t seq)
                         << "Starting a cursor: " << cursorStr
                         << " markers = " << markers;
 
-                    while (true)
+                    while (!stopping_)
                     {
                         auto res = Backend::retryOnTimeout(
                             [this, seq, &cursor, &yield]() {
@@ -1016,7 +1016,6 @@ ReportingETL::loadCache(uint32_t seq)
                 });
         }
     }};
-    downloader.detach();
     // If loading synchronously, poll cache until full
     while (cacheLoadStyle_ == CacheLoadStyle::SYNC &&
            !backend_->cache().isFull())
