@@ -56,6 +56,8 @@ private:
     // number of markers to use at one time to traverse the ledger in parallel
     // during initial cache download
     size_t numCacheMarkers_ = 16;
+
+    size_t cachePageFetchSize_ = 256;
     std::thread cacheDownloader_;
 
     std::thread worker_;

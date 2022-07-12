@@ -975,11 +975,13 @@ ReportingETL::loadCache(uint32_t seq)
 
                     while (!stopping_)
                     {
-                        auto res = Backend::retryOnTimeout(
-                            [this, seq, &cursor, &yield]() {
-                                return backend_->fetchLedgerPage(
-                                    cursor, seq, 256, false, yield);
-                            });
+                        auto res = Backend::retryOnTimeout([this,
+                                                            seq,
+                                                            &cursor,
+                                                            &yield]() {
+                            return backend_->fetchLedgerPage(
+                                cursor, seq, cachePageFetchSize_, false, yield);
+                        });
                         backend_->cache().update(res.objects, seq, true);
                         if (!res.cursor || (end && *(res.cursor) > *end))
                             break;
@@ -1125,13 +1127,12 @@ ReportingETL::ReportingETL(
             if (entry == "none" || entry == "no")
                 cacheLoadStyle_ = CacheLoadStyle::NOT_AT_ALL;
         }
-        if (cache.contains("num_diffs") && cache.at("num_diffs").as_int64())
-        {
+        if (cache.contains("num_diffs") && cache.at("num_diffs").is_int64())
             numCacheDiffs_ = cache.at("num_diffs").as_int64();
-        }
-        if (cache.contains("num_markers") && cache.at("num_markers").as_int64())
-        {
+        if (cache.contains("num_markers") && cache.at("num_markers").is_int64())
             numCacheMarkers_ = cache.at("num_markers").as_int64();
-        }
+        if (cache.contains("page_fetch_size") &&
+            cache.at("page_fetch_size").is_int64())
+            cachePageFetchSize_ = cache.at("page_fetch_size").as_int64();
     }
 }
