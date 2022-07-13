@@ -245,7 +245,7 @@ public:
     }
 
     void
-    handle_request(std::string const&& msg, boost::asio::yield_context& yc)
+    handle_request(std::string const&& msg, boost::asio::yield_context& yc, bool timedOut)
     {
         auto ip = derived().ip();
         if (!ip)
@@ -260,6 +260,8 @@ public:
 
             send(boost::json::serialize(e));
         };
+        if(timedOut)
+            return sendError(RPC::Error::rpcTOO_Busy);
 
         boost::json::value raw = [](std::string const&& msg) {
             try
@@ -401,8 +403,8 @@ public:
         {
             if (!queue_.postCoro(
                     [m = std::move(msg), shared_this = shared_from_this()](
-                        boost::asio::yield_context yield) {
-                        shared_this->handle_request(std::move(m), yield);
+                        boost::asio::yield_context yield, bool timedOut) {
+                        shared_this->handle_request(std::move(m), yield, timedOut);
                     },
                     dosGuard_.isWhiteListed(*ip)))
                 sendError("Server overloaded");

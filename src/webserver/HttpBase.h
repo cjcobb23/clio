@@ -226,7 +226,7 @@ public:
         // Requests are handed using coroutines. Here we spawn a coroutine
         // which will asynchronously handle a request.
         if (!workQueue_.postCoro(
-                [this, ip, session](boost::asio::yield_context yield) {
+                [this, ip, session](boost::asio::yield_context yield, bool timedOut) {
                     handle_request(
                         yield,
                         std::move(req_),
@@ -238,7 +238,7 @@ public:
                         dosGuard_,
                         counters_,
                         *ip,
-                        session);
+                        session, timedOut);
                 },
                 dosGuard_.isWhiteListed(*ip)))
         {
@@ -297,7 +297,8 @@ handle_request(
     DOSGuard& dosGuard,
     RPC::Counters& counters,
     std::string const& ip,
-    std::shared_ptr<Session> http)
+    std::shared_ptr<Session> http,
+    bool timedOut)
 {
     auto const httpResponse = [&req](
                                   http::status status,
@@ -327,6 +328,13 @@ handle_request(
             http::status::ok,
             "application/json",
             boost::json::serialize(RPC::make_error(RPC::Error::rpcSLOW_DOWN))));
+
+    if (timedOut)
+            return send(httpResponse(
+                http::status::ok,
+                "application/json",
+                boost::json::serialize(
+                    RPC::make_error(RPC::Error::rpcTOO_BUSY))));
 
     try
     {

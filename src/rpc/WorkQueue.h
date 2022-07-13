@@ -54,7 +54,13 @@ public:
                 durationUs_ += wait;
                 BOOST_LOG_TRIVIAL(debug) << "WorkQueue wait time = " << wait
                                          << " queue size = " << curSize_;
-                f(yield);
+                if(std::chrono::duration_cast<std::chrono::seconds>(run - start) >= 3)
+                {
+                
+                    timedOut = true;
+                    BOOST_LOG_TRIVIAL(error) << "WorkQueue wait time 3 seconds or greater. Timing out. wait = " << wait << " . queue size = " << curSize_;
+                }
+                f(yield,timedOut);
                 --curSize_;
             });
         return true;
