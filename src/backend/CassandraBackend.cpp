@@ -906,8 +906,10 @@ CassandraBackend::open(bool readOnly)
            << ", result: " << rc << ", " << cass_error_desc(rc);
         throw std::runtime_error(ss.str());
     }
-    if (getInt("max_requests_outstanding"))
-        maxRequestsOutstanding = *getInt("max_requests_outstanding");
+    if (getInt("max_write_requests_outstanding"))
+        writeThrottle_.maxRequestsOutstanding = *getInt("max_write_requests_outstanding");
+    if (getInt("max_read_requests_outstanding"))
+        readThrottle_.maxRequestsOutstanding = *getInt("max_read_requests_outstanding");
 
     if (getInt("sync_interval"))
         syncInterval_ = *getInt("sync_interval");
@@ -915,12 +917,15 @@ CassandraBackend::open(bool readOnly)
         << __func__ << " sync interval is " << syncInterval_
         << ". max requests outstanding is " << maxRequestsOutstanding;
 
+    if(syncInterval_ != 1)
+        BOOST_LOG_TRIVIAL(warn) << __func__ << " Sync interval is not 1! Be very careful with this. This should only be used during a historical backfill, and you should only have one writer".
+
     cass_cluster_set_request_timeout(cluster, 10000);
 
     rc = cass_cluster_set_queue_size_io(
-        cluster,
-        maxRequestsOutstanding);  // This number needs to scale w/ the
-                                  // number of request per sec
+            cluster,
+            writeThrottle_.maxRequestsOutstanding + readThrottle_.maxRequestsOutstanding);  // This number needs to scale w/ the
+    // number of request per sec
     if (rc != CASS_OK)
     {
         std::stringstream ss;

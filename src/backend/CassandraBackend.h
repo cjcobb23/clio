@@ -612,18 +612,23 @@ private:
     uint32_t syncInterval_ = 1;
     uint32_t lastSync_ = 0;
 
-    // maximum number of concurrent in flight requests. New requests will wait
-    // for earlier requests to finish if this limit is exceeded
-    std::uint32_t maxRequestsOutstanding = 10000;
-    // we keep this small because the indexer runs in the background, and we
-    // don't want the database to be swamped when the indexer is running
-    std::uint32_t indexerMaxRequestsOutstanding = 10;
-    mutable std::atomic_uint32_t numRequestsOutstanding_ = 0;
+    struct Throttle {
+        // maximum number of concurrent in flight requests. New requests will wait
+        // for earlier requests to finish if this limit is exceeded
+        std::uint32_t maxRequestsOutstanding = 10000;
+        std::atomic_uint32_t curRequestsOutstanding = 0;
 
-    // mutex and condition_variable to limit the number of concurrent in flight
-    // requests
-    mutable std::mutex throttleMutex_;
-    mutable std::condition_variable throttleCv_;
+        // mutex and condition_variable to limit the number of concurrent in flight
+        // requests
+        std::mutex mtx;
+        std::condition_variable cv;
+
+        Throttle(size_t max) : maxRequestsOutstanding(max) {}
+        bool canAddRequest() { return curRequestsOutstanding < maxRequestsOutstanding;}
+    };
+
+    mutable Throttle writeThrottle_{10000};
+    mutable Throttle readThrottle_{30000};
 
     // writes are asynchronous. This mutex and condition_variable is used to
     // wait for all writes to finish
@@ -968,38 +973,58 @@ public:
         boost::asio::yield_context& yield) const override;
 
     inline void
-    incremementOutstandingRequestCount() const
+    incremementOutstandingRequestCount(Throttle& throttle) const
     {
         {
-            std::unique_lock<std::mutex> lck(throttleMutex_);
-            if (!canAddRequest())
+            std::unique_lock<std::mutex> lck(throttle.mtx);
+            if (!throttle.canAddRequest())
             {
                 BOOST_LOG_TRIVIAL(info)
                     << __func__ << " : "
                     << "Max outstanding requests reached. "
                     << "Waiting for other requests to finish";
-                throttleCv_.wait(lck, [this]() { return canAddRequest(); });
+                throttle.cv.wait(lck, [&throttle]() { return throttle.canAddRequest(); });
             }
         }
-        ++numRequestsOutstanding_;
+        ++throttle.curRequestsOutstanding;
+    }
+    inline void
+    incremementOutstandingWriteRequestCount() const
+    {
+
+        incremementOutstandingRequestCount(writeThrottle_);
+    }
+    inline void
+    incremementOutstandingReadRequestCount() const
+    {
+
+        incremementOutstandingRequestCount(readThrottle_);
     }
 
-    inline void
-    decrementOutstandingRequestCount() const
+
+    inline size_t
+    decrementOutstandingRequestCount(Throttle& throttle) const
     {
         // sanity check
-        if (numRequestsOutstanding_ == 0)
+        if (throttle.curRequestsOutstanding == 0)
         {
             assert(false);
             throw std::runtime_error("decrementing num outstanding below 0");
         }
-        size_t cur = (--numRequestsOutstanding_);
+        size_t cur = (--throttle.curRequestsOutstanding);
         {
             // mutex lock required to prevent race condition around spurious
             // wakeup
-            std::lock_guard lck(throttleMutex_);
-            throttleCv_.notify_one();
+            std::lock_guard lck(throttle.mtx);
+            throttle.cv.notify_one();
         }
+        return cur;
+    }
+
+    inline void
+    decrementOutstandingWriteRequestCount() const
+    {
+        size_t cur = decrementOutstandingRequestCount(writeThrottle_);
         if (cur == 0)
         {
             // mutex lock required to prevent race condition around spurious
@@ -1008,16 +1033,16 @@ public:
             syncCv_.notify_one();
         }
     }
-
-    inline bool
-    canAddRequest() const
+    inline void
+    decrementOutstandingReadRequestCount() const
     {
-        return numRequestsOutstanding_ < maxRequestsOutstanding;
+        decrementOutstandingRequestCount(readThrottle_);
     }
+
     inline bool
     finishedAllRequests() const
     {
-        return numRequestsOutstanding_ == 0;
+        return return throttle.curRequestsOutstanding == 0;
     }
 
     void
@@ -1050,7 +1075,7 @@ public:
         bool isRetry) const
     {
         if (!isRetry)
-            incremementOutstandingRequestCount();
+            incremementOutstandingWriteRequestCount();
         executeAsyncHelper(statement, callback, callbackData);
     }
 
@@ -1153,6 +1178,7 @@ public:
         using result = boost::asio::async_result<
             boost::asio::yield_context,
             void(boost::system::error_code, CassError)>;
+        incremementOutstandingReadRequestCount();
 
         CassFuture* fut;
         CassError rc;
