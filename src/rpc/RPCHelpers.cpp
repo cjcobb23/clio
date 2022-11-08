@@ -201,7 +201,8 @@ getAccount(
     boost::json::object const& request,
     ripple::AccountID& account,
     boost::string_view const& field,
-    bool required)
+    bool required,
+    bool strict = false)
 {
     if (!request.contains(field))
     {
@@ -222,8 +223,17 @@ getAccount(
         account = a.value();
         return {};
     }
+    if (strict)
+        return Status{Error::rpcACT_MALFORMED, field.to_string() + "Malformed"};
 
-    return Status{Error::rpcACT_MALFORMED, field.to_string() + "Malformed"};
+    std::cout << "parsing seed" << std::endl;
+    if (auto a = accountFromSeed(request.at(field).as_string().c_str()); a)
+    {
+        std::cout << "parsed seed" << std::endl;
+        account = a.value();
+        return {};
+    }
+    return Status{Error::rpcBAD_SEED};
 }
 
 Status
@@ -253,9 +263,12 @@ getOptionalAccount(
 }
 
 Status
-getAccount(boost::json::object const& request, ripple::AccountID& accountId)
+getAccount(
+    boost::json::object const& request,
+    ripple::AccountID& accountId,
+    bool strict)
 {
-    return getAccount(request, accountId, JS(account), true);
+    return getAccount(request, accountId, JS(account), true, strict);
 }
 
 Status
@@ -350,14 +363,18 @@ canHaveDeliveredAmount(
 std::optional<ripple::AccountID>
 accountFromSeed(std::string const& account)
 {
+    std::cout << "parsing seed" << std::endl;
     auto const seed = ripple::parseGenericSeed(account);
 
+    std::cout << "parsing seed" << std::endl;
     if (!seed)
         return {};
 
+    std::cout << "parsing seed" << std::endl;
     auto const keypair =
         ripple::generateKeyPair(ripple::KeyType::secp256k1, *seed);
 
+    std::cout << "parsing seed" << std::endl;
     return ripple::calcAccountID(keypair.first);
 }
 

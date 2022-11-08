@@ -232,7 +232,10 @@ Status
 getHexMarker(boost::json::object const& request, ripple::uint256& marker);
 
 Status
-getAccount(boost::json::object const& request, ripple::AccountID& accountId);
+getAccount(
+    boost::json::object const& request,
+    ripple::AccountID& accountId,
+    bool strict = false);
 
 Status
 getAccount(

@@ -6,7 +6,7 @@ Result
 doAccountTx(Context const& context)
 {
     ripple::AccountID accountID;
-    if (auto const status = getAccount(context.params, accountID); status)
+    if (auto const status = getAccount(context.params, accountID, true); status)
         return status;
 
     constexpr std::string_view outerFuncName = __func__;
