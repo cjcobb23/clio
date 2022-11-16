@@ -672,7 +672,6 @@ traverseOwnedNodes(
         startHint,
         sequence,
         limit,
-        jsonCursor,
         yield,
         atOwnedNode);
 }
@@ -680,18 +679,20 @@ traverseOwnedNodes(
 std::variant<Status, AccountCursor>
 traverseOwnedNodes(
     BackendInterface const& backend,
-    ripple::Keylet const& owner,
+    ripple::Keylet const& root,
     ripple::uint256 const& hexMarker,
     std::uint32_t const startHint,
     std::uint32_t sequence,
     std::uint32_t limit,
-    std::optional<std::string> jsonCursor,
     boost::asio::yield_context& yield,
     std::function<void(ripple::SLE&&)> atOwnedNode)
 {
+    if (!backend.fetchLedgerObject(root.key, sequence, yield))
+        return Status{Error::rpcOBJECT_NOT_FOUND, "notFound"};
+
     auto cursor = AccountCursor({beast::zero, 0});
 
-    auto const rootIndex = owner;
+    auto const rootIndex = root;
     auto currentIndex = rootIndex;
 
     std::vector<ripple::uint256> keys;

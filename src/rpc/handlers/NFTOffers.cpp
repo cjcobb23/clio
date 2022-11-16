@@ -109,7 +109,6 @@ enumerateNFTOffers(
         startHint,
         lgrInfo.seq,
         reserve,
-        {},
         context.yield,
         [&offers](ripple::SLE&& offer) {
             if (offer.getType() == ripple::ltNFTOKEN_OFFER)

@@ -89,6 +89,8 @@ generatePubLedgerMessage(
 std::variant<Status, ripple::LedgerInfo>
 ledgerInfoFromRequest(Context const& ctx);
 
+// Called by RPC methods that traverse account owned objects, such as
+// account_objects, account_lines, gateway_balances, etc
 std::variant<Status, AccountCursor>
 traverseOwnedNodes(
     BackendInterface const& backend,
@@ -99,15 +101,16 @@ traverseOwnedNodes(
     boost::asio::yield_context& yield,
     std::function<void(ripple::SLE&&)> atOwnedNode);
 
+// Can be used to traverse any sort of directory structure, even if root is not
+// an account. Called directly by nft_sell_offers, and nft_buy_offers
 std::variant<Status, AccountCursor>
 traverseOwnedNodes(
     BackendInterface const& backend,
-    ripple::Keylet const& owner,
+    ripple::Keylet const& root,
     ripple::uint256 const& hexMarker,
     std::uint32_t const startHint,
     std::uint32_t sequence,
     std::uint32_t limit,
-    std::optional<std::string> jsonCursor,
     boost::asio::yield_context& yield,
     std::function<void(ripple::SLE&&)> atOwnedNode);
 
